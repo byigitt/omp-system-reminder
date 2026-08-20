@@ -1,0 +1,32 @@
+{
+  "name": "omp-system-reminder",
+  "version": "0.1.0",
+  "description": "Inject a configurable system reminder before every OMP model call.",
+  "license": "MIT",
+  "type": "module",
+  "keywords": [
+    "omp",
+    "oh-my-pi",
+    "extension",
+    "system-prompt"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/byigitt/omp-system-reminder.git"
+  },
+  "homepage": "https://github.com/byigitt/omp-system-reminder#readme",
+  "bugs": {
+    "url": "https://github.com/byigitt/omp-system-reminder/issues"
+  },
+  "scripts": {
+    "test": "bun test"
+  },
+  "files": [
+    "src"
+  ],
+  "omp": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  }
+}
