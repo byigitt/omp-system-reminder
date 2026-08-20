@@ -1,6 +1,6 @@
 {
   "name": "omp-system-reminder",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Inject a configurable system reminder before every OMP model call.",
   "license": "MIT",
   "type": "module",

@@ -31,13 +31,13 @@ type ContextHandler = (
 ) => Promise<ContextResult | undefined>;
 type CommandHandler = (args: string, ctx: TestContext) => Promise<void>;
 
-function createHarness(editorResult = "First line\nSecond line") {
+function createHarness(editorResult = "First line\nSecond line", existingCwd?: string) {
 	let sessionStartHandler: SessionHandler | undefined;
 	let contextHandler: ContextHandler | undefined;
 	let commandHandler: CommandHandler | undefined;
 	const notifications: Array<{ message: string; type?: string }> = [];
-	const cwd = mkdtempSync(join(tmpdir(), "omp-system-reminder-"));
-	temporaryDirectories.push(cwd);
+	const cwd = existingCwd ?? mkdtempSync(join(tmpdir(), "omp-system-reminder-"));
+	if (!existingCwd) temporaryDirectories.push(cwd);
 
 	const pi = {
 		setLabel() {},
@@ -77,7 +77,7 @@ describe("system reminder extension", () => {
 	test("injects the edited reminder before every model call", async () => {
 		const { commandHandler, contextHandler, ctx, sessionStartHandler } = createHarness();
 		await sessionStartHandler({}, ctx);
-		await commandHandler("edit", ctx);
+		await commandHandler("edit project", ctx);
 
 		const first = await contextHandler({ messages: [{ role: "user", content: "hello", timestamp: 1 }] }, ctx);
 		const second = await contextHandler({ messages: [{ role: "toolResult", content: [], timestamp: 2 }] }, ctx);
@@ -92,12 +92,69 @@ describe("system reminder extension", () => {
 		});
 	});
 
-	test("persists the active reminder to project configuration", async () => {
-		const { commandHandler, ctx, cwd, sessionStartHandler } = createHarness("Persistent reminder");
-		await sessionStartHandler({}, ctx);
-		await commandHandler("edit", ctx);
-		await commandHandler("save project", ctx);
+	test("persists edited text across sessions", async () => {
+		const first = createHarness("Persistent reminder");
+		await first.sessionStartHandler({}, first.ctx);
+		await first.commandHandler("edit project", first.ctx);
 
-		expect(readFileSync(join(cwd, ".omp", "SYSTEM_REMINDER.md"), "utf8")).toBe("Persistent reminder\n");
+		expect(JSON.parse(readFileSync(join(first.cwd, ".omp", "SYSTEM_REMINDER.json"), "utf8"))).toEqual({
+			enabled: true,
+			preset: "custom",
+			text: "Persistent reminder",
+		});
+
+		const resumed = createHarness("", first.cwd);
+		await resumed.sessionStartHandler({}, resumed.ctx);
+		const context = await resumed.contextHandler({ messages: [{ role: "user", content: "hello" }] }, resumed.ctx);
+		expect(context?.messages.at(-1)).toMatchObject({
+			role: "developer",
+			content: "<system-reminder>\nPersistent reminder\n</system-reminder>",
+		});
+	});
+
+	test("persists off and on state without losing text", async () => {
+		const first = createHarness("Toggle reminder");
+		await first.sessionStartHandler({}, first.ctx);
+		await first.commandHandler("edit project", first.ctx);
+		await first.commandHandler("off project", first.ctx);
+
+		expect(JSON.parse(readFileSync(join(first.cwd, ".omp", "SYSTEM_REMINDER.json"), "utf8"))).toEqual({
+			enabled: false,
+			preset: "custom",
+			text: "Toggle reminder",
+		});
+
+		const disabled = createHarness("", first.cwd);
+		await disabled.sessionStartHandler({}, disabled.ctx);
+		expect(await disabled.contextHandler({ messages: [{ role: "user", content: "hello" }] }, disabled.ctx)).toBeUndefined();
+
+		await disabled.commandHandler("on project", disabled.ctx);
+		const enabled = createHarness("", first.cwd);
+		await enabled.sessionStartHandler({}, enabled.ctx);
+		const context = await enabled.contextHandler({ messages: [{ role: "user", content: "hello" }] }, enabled.ctx);
+		expect(context?.messages.at(-1)).toMatchObject({
+			role: "developer",
+			content: "<system-reminder>\nToggle reminder\n</system-reminder>",
+		});
+	});
+
+	test("persists and automatically loads a writing-style preset", async () => {
+		const first = createHarness();
+		await first.sessionStartHandler({}, first.ctx);
+		await first.commandHandler("preset plain-language project", first.ctx);
+
+		expect(JSON.parse(readFileSync(join(first.cwd, ".omp", "SYSTEM_REMINDER.json"), "utf8"))).toEqual({
+			enabled: true,
+			preset: "plain-language",
+			text: "",
+		});
+
+		const resumed = createHarness("", first.cwd);
+		await resumed.sessionStartHandler({}, resumed.ctx);
+		const context = await resumed.contextHandler({ messages: [{ role: "user", content: "hello" }] }, resumed.ctx);
+		expect(context?.messages.at(-1)).toMatchObject({
+			role: "developer",
+			content: expect.stringContaining("Write every response in simple, plain language"),
+		});
 	});
 });
