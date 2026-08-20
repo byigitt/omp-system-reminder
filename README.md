@@ -52,15 +52,16 @@ Inline text is also saved and enabled:
 /system-reminder Be concise. Lead with the result and skip narration.
 ```
 
-Configuration is global by default. Add `project` to keep a setting under the current repository:
+Commands modify the currently active persistent scope: project when a project configuration is loaded, otherwise global. Add `project` or `global` to force a scope:
 
 ```text
 /system-reminder edit project
+/system-reminder edit global
 /system-reminder off project
-/system-reminder on project
+/system-reminder on global
 ```
 
-Project configuration takes precedence over global configuration.
+Project configuration takes precedence over global configuration when a session starts.
 
 ## Automatic writing-style presets
 
